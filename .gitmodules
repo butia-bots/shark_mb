@@ -1,0 +1,6 @@
+[submodule "shark-mb-ros"]
+	path = shark-mb-ros
+	url = https://github.com/butia-bots/shark-mb-ros.git
+[submodule "doris_base"]
+	path = doris_base
+	url = https://github.com/butia-bots/doris_base.git

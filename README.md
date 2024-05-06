@@ -41,3 +41,12 @@ _Click the image to access the ONSHAPE 3D model of the base_
 
 
 _Access [common errors](https://github.com/richassis/shark_mb/wiki/common-errors) wiki page in case you face any problems_
+
+## Main discussions ##
+
+*[How to run shark on ros2](https://github.com/richassis/shark_mb/discussions/2#discussion-6614959*)*
+
+
+# Useful related repositories and links #
+
+[shark-mb-ros repository](https://github.com/butia-bots/shark-mb-ros/tree/06739763ce3a8e2b3a5d99e19266c225177aa1d6)

@@ -24,3 +24,20 @@ _Click the image to access the ONSHAPE 3D model of the base_
 | Suspension system  | 0.00  | [link](https://github.com/richassis/shark_mb/) |
 
 **[Access wiki](https://github.com/richassis/shark_mb/wiki/SHARK-building-tutorial) for the complete building tutorial**
+
+## Running SHARK on ROS ##
+
+### Setting up URDF ###
+- Setting up URDF
+  - `Setting up URDF`
+
+### Setting up USB rules ###
+- Setting up USB rules
+  - `Setting up USB rules`
+
+### Running test script ###
+- Running test script
+  - `Running test script`
+
+
+_Access [common errors](https://github.com/richassis/shark_mb/wiki/common-errors) wiki page in case you face any problems_

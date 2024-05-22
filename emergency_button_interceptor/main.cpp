@@ -1,10 +1,11 @@
- #include <stdio.h>
+#include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "hardware/uart.h"
-#include "pico/cyw43_arch.h"
+// #include "pico/cyw43_arch.h"
 
 #define START_FRAME 0xABCD
 #define BAUDRATE 115200
@@ -42,6 +43,13 @@ struct FDB
     uint16_t checksum;
 } feedback;
 
+struct FDBWB
+{
+    FDB data;
+    uint8_t button_state;
+}feedback_with_button;
+
+
 struct CMD
 {
     uint16_t start;
@@ -50,23 +58,9 @@ struct CMD
     uint16_t checksum;
 } command, send, zeroSpeed;
 
-// struct COMMCONTROL
-// {
-//     STATE state;
-//     uint16_t start;
-//     int idx;
-//     uint8_t *p;
-//     uint16_t checksum;
-// };
 
 int main()
 {
-    // if (cyw43_arch_init()) {
-    //     printf("Wi-Fi init failed");
-    //     return -1;
-    // }
-    // UART AND STDIO CONFIG
-
     int lastUpdate = to_ms_since_boot(get_absolute_time());
 
     stdio_init_all();
@@ -111,6 +105,8 @@ int main()
     // MAIN LOOP
     while (1)
     {
+        now = to_ms_since_boot(get_absolute_time());
+        bool button_state = gpio_get(BUTTON_PIN);
         // GET FEEDBACK
         switch (state)
         {
@@ -141,7 +137,10 @@ int main()
             checksum = (uint16_t)(feedback.start ^ feedback.cmd1 ^ feedback.cmd2 ^ feedback.speedR_meas ^ feedback.speedL_meas ^ feedback.wheelR_cnt ^ feedback.wheelL_cnt ^ feedback.batVoltage ^ feedback.boardTemp ^ feedback.cmdLed);
             if (checksum = feedback.checksum)
             {
-                uart_write_blocking(UART_PC, (uint8_t *)&feedback, sizeof(FDB));
+                memcpy((uint8_t *)&feedback_with_button, (const uint8_t *)&feedback, sizeof(FDB));
+                feedback_with_button.button_state = !button_state;
+                feedback_with_button.data.checksum = (uint16_t)(checksum ^ feedback_with_button.button_state);
+                uart_write_blocking(UART_PC, (uint8_t *)&feedback_with_button, sizeof(FDBWB));
             }
             start = 0x0;
             p = (uint8_t *)&feedback;
@@ -195,8 +194,6 @@ int main()
         }
 
         // WRITE COMMAND
-        now = to_ms_since_boot(get_absolute_time());
-        bool button_state = gpio_get(BUTTON_PIN);
         // bool button_state = 1;
         if (now - time > INTERVAL)
         {

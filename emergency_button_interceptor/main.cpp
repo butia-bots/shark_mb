@@ -135,7 +135,7 @@ int main()
             break;
         case READY:
             checksum = (uint16_t)(feedback.start ^ feedback.cmd1 ^ feedback.cmd2 ^ feedback.speedR_meas ^ feedback.speedL_meas ^ feedback.wheelR_cnt ^ feedback.wheelL_cnt ^ feedback.batVoltage ^ feedback.boardTemp ^ feedback.cmdLed);
-            if (checksum = feedback.checksum)
+            if (checksum == feedback.checksum)
             {
                 memcpy((uint8_t *)&feedback_with_button, (const uint8_t *)&feedback, sizeof(FDB));
                 feedback_with_button.button_state = !button_state;
@@ -181,7 +181,7 @@ int main()
             break;
         case READY:
             usb_checksum = (uint16_t)((command.start ^ command.steer ^ command.speed));
-            if (usb_checksum = command.checksum)
+            if (usb_checksum == command.checksum)
             {
                 send = command;
                 lastUpdate = to_ms_since_boot(get_absolute_time());

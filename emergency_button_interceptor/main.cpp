@@ -90,6 +90,7 @@ int main()
     int usb_idx = 0;
     uint8_t *usb_p = (uint8_t *)&command;
     uint16_t usb_checksum = 0x0;
+    bool new_message = false;
 
     // COMMAND CONFIG
     int time = to_ms_since_boot(get_absolute_time());
@@ -190,22 +191,22 @@ int main()
             usb_p = (uint8_t *)&command;
             usb_idx = 0;
             usb_state = IDLE;
+            new_message = true;
             break;
         }
 
         // WRITE COMMAND
         // bool button_state = 1;
-        if (now - time > INTERVAL)
-        {
+        
             // cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN,1);
             if (!button_state || (now - lastUpdate > 500))
             {
                 uart_write_blocking(UART, (uint8_t *)&zeroSpeed, sizeof(CMD));
             }
-            else{
+            else if(new_message)
+            {
                 uart_write_blocking(UART, (uint8_t *)&send, sizeof(CMD));
+                time = now;
             }
-            time = now;
-        }
     }
 }

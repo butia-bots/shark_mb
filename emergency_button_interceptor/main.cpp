@@ -4,6 +4,7 @@
 
 #include "pico/stdlib.h"
 #include "pico/time.h"
+#include "pico/multicore.h"
 #include "hardware/uart.h"
 // #include "pico/cyw43_arch.h"
 
@@ -20,6 +21,7 @@
 #define UART_PC uart1
 
 const int INTERVAL = 1000 / 40;
+bool button_state;
 
 typedef enum
 {
@@ -47,8 +49,7 @@ struct FDBWB
 {
     FDB data;
     uint8_t button_state;
-}feedback_with_button;
-
+} feedback_with_button;
 
 struct CMD
 {
@@ -58,10 +59,11 @@ struct CMD
     uint16_t checksum;
 } command, send, zeroSpeed;
 
+void pc2hover();
+void hover2pc();
 
 int main()
 {
-    int lastUpdate = to_ms_since_boot(get_absolute_time());
 
     stdio_init_all();
     uart_init(UART, BAUDRATE);
@@ -77,21 +79,6 @@ int main()
     gpio_set_dir(BUTTON_PIN, GPIO_OUT);
     gpio_pull_down(BUTTON_PIN);
 
-    // FEEDBACK CONFIG
-    STATE state = IDLE;
-    uint16_t start = 0x0;
-    int idx = 0;
-    uint8_t *p = (uint8_t *)&feedback;
-    uint16_t checksum = 0x0;
-
-    // USB COMMAND
-    STATE usb_state = IDLE;
-    uint16_t usb_start = 0x0;
-    int usb_idx = 0;
-    uint8_t *usb_p = (uint8_t *)&command;
-    uint16_t usb_checksum = 0x0;
-    bool new_message = false;
-
     // COMMAND CONFIG
     int time = to_ms_since_boot(get_absolute_time());
     int now = 0;
@@ -100,59 +87,32 @@ int main()
     zeroSpeed.start = (uint16_t)START_FRAME;
     zeroSpeed.speed = (uint16_t)0;
     zeroSpeed.steer = (uint16_t)0;
-    zeroSpeed.checksum =  (uint16_t)((send.start ^ send.steer ^ send.speed));
+    zeroSpeed.checksum = (uint16_t)((send.start ^ send.steer ^ send.speed));
+    multicore_launch_core1(pc2hover);
+
+    hover2pc();
+
+
+}
+
+void pc2hover()
+{
+    int lastUpdate = to_ms_since_boot(get_absolute_time());
+
+    STATE usb_state = IDLE;
+    uint16_t usb_start = 0x0;
+    int usb_idx = 0;
+    uint8_t *usb_p = (uint8_t *)&command;
+    uint16_t usb_checksum = 0x0;
+    bool new_message = false;
     uint8_t byte;
+    int now = 0;
+    int time = to_ms_since_boot(get_absolute_time());
 
-    // MAIN LOOP
-    while (1)
+    while (true)
     {
+        button_state = gpio_get(BUTTON_PIN);
         now = to_ms_since_boot(get_absolute_time());
-        bool button_state = gpio_get(BUTTON_PIN);
-        // GET FEEDBACK
-        switch (state)
-        {
-        case IDLE:
-            if (!uart_is_readable(UART))
-                break;
-            start = ((uint16_t)(uart_getc(UART)) << 8) | (start >> 8);
-            if (start == START_FRAME)
-            {
-                // printf("Start %x\n", start);
-                feedback.start = start;
-                p += 2;
-                idx = 2;
-                state = RECEIVING;
-            }
-            break;
-        case RECEIVING:
-            if (!uart_is_readable(UART))
-                break;
-            *p = uart_getc(UART);
-            p++;
-            idx++;
-            // p++;
-            if (sizeof(FDB) == idx)
-                state = READY;
-            break;
-        case READY:
-            checksum = (uint16_t)(feedback.start ^ feedback.cmd1 ^ feedback.cmd2 ^ feedback.speedR_meas ^ feedback.speedL_meas ^ feedback.wheelR_cnt ^ feedback.wheelL_cnt ^ feedback.batVoltage ^ feedback.boardTemp ^ feedback.cmdLed);
-            if (checksum == feedback.checksum)
-            {
-                memcpy((uint8_t *)&feedback_with_button, (const uint8_t *)&feedback, sizeof(FDB));
-                feedback_with_button.button_state = !button_state;
-                feedback_with_button.data.checksum = (uint16_t)(checksum ^ feedback_with_button.button_state);
-                uart_write_blocking(UART_PC, (uint8_t *)&feedback_with_button, sizeof(FDBWB));
-            }
-            start = 0x0;
-            p = (uint8_t *)&feedback;
-            idx = 0;
-            state = IDLE;
-            break;
-        }
-
-        // COMMAND FROM USB
-        //  int new_data = getchar_timeout_us(0);
-
         switch (usb_state)
         {
         case IDLE:
@@ -194,19 +154,68 @@ int main()
             new_message = true;
             break;
         }
+        if (!button_state || (now - lastUpdate > 500))
+        {
+            uart_write_blocking(UART, (uint8_t *)&zeroSpeed, sizeof(CMD));
+        }
+        else if (new_message)
+        {
+            uart_write_blocking(UART, (uint8_t *)&send, sizeof(CMD));
+            time = now;
+        }
+    }
+}
 
-        // WRITE COMMAND
-        // bool button_state = 1;
-        
-            // cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN,1);
-            if (!button_state || (now - lastUpdate > 500))
+void hover2pc()
+{
+    // FEEDBACK CONFIG
+    STATE state = IDLE;
+    uint16_t start = 0x0;
+    int idx = 0;
+    uint8_t *p = (uint8_t *)&feedback;
+    uint16_t checksum = 0x0;
+
+    while (1)
+    {
+        switch (state)
+        {
+        case IDLE:
+            if (!uart_is_readable(UART))
+                break;
+            start = ((uint16_t)(uart_getc(UART)) << 8) | (start >> 8);
+            if (start == START_FRAME)
             {
-                uart_write_blocking(UART, (uint8_t *)&zeroSpeed, sizeof(CMD));
+                // printf("Start %x\n", start);
+                feedback.start = start;
+                p += 2;
+                idx = 2;
+                state = RECEIVING;
             }
-            else if(new_message)
+            break;
+        case RECEIVING:
+            if (!uart_is_readable(UART))
+                break;
+            *p = uart_getc(UART);
+            p++;
+            idx++;
+            // p++;
+            if (sizeof(FDB) == idx)
+                state = READY;
+            break;
+        case READY:
+            checksum = (uint16_t)(feedback.start ^ feedback.cmd1 ^ feedback.cmd2 ^ feedback.speedR_meas ^ feedback.speedL_meas ^ feedback.wheelR_cnt ^ feedback.wheelL_cnt ^ feedback.batVoltage ^ feedback.boardTemp ^ feedback.cmdLed);
+            if (checksum == feedback.checksum)
             {
-                uart_write_blocking(UART, (uint8_t *)&send, sizeof(CMD));
-                time = now;
+                memcpy((uint8_t *)&feedback_with_button, (const uint8_t *)&feedback, sizeof(FDB));
+                feedback_with_button.button_state = !button_state;
+                feedback_with_button.data.checksum = (uint16_t)(checksum ^ feedback_with_button.button_state);
+                uart_write_blocking(UART_PC, (uint8_t *)&feedback_with_button, sizeof(FDBWB));
             }
+            start = 0x0;
+            p = (uint8_t *)&feedback;
+            idx = 0;
+            state = IDLE;
+            break;
+        }
     }
 }

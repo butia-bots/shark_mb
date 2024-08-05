@@ -207,6 +207,7 @@ int main()
             {
                 uart_write_blocking(UART, (uint8_t *)&send, sizeof(CMD));
                 time = now;
+                new_message = false;
             }
     }
 }
